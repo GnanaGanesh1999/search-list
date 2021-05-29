@@ -1,17 +1,22 @@
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import axios from "axios";
 
 
 export const useSearch = (query) => {
-
     const [state, setState] = useState({
         articles: [],
         status: 'IDLE',
         error: ''
     });
-
+    const CancelToken = useRef(null);
     useEffect(() => {
-        axios.get(`https://en.wikipedia.org/w/api.php?origin=*&action=opensearch&search=${query}`)
+        if (CancelToken.current) {
+            console.log('CANCEL')
+            CancelToken.current.cancel();
+        }
+        CancelToken.current = axios.CancelToken.source();
+        axios.get(`https://en.wikipedia.org/w/api.php?origin=*&action=opensearch&search=${query}`,
+            {cancelToken: CancelToken.current.token})
             .then(function (response) {
                 const responseData = response.data;
                 const parsedData = []
@@ -24,20 +29,36 @@ export const useSearch = (query) => {
                 setState(
                     {
                         articles: parsedData,
-                        status: 'SUCCESS',
+                        status: '   SUCCESS',
                         error: ''
                     }
                 );
             })
             .catch(function (error) {
-                setState(
-                    {
-                        articles: [],
-                        status: 'ERROR',
-                        error: error
-                    }
-                );
-            })
+                if (axios.isCancel(error)) {
+                    console.log('ERROR')
+                    return;
+                }
+                setState({
+                    articles: [],
+                    status: 'ERROR',
+                    error: error
+                });
+            });
     }, [query])
     return state;
-}
+};
+
+export const useDebounce = (value, delay = 2000) => {
+
+    const [debounceValue, setDebounceValue] = useState(value);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebounceValue(value);
+        }, delay);
+
+        return () => clearTimeout(timer);
+    }, [value, delay]);
+    return debounceValue;
+};
